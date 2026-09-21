@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Child Psych — Learn Mode</title>
+<style>
+  :root{
+    --blue:#4257b2; --green:#2ea44f; --red:#d1453b; --bg:#0f1620; --card:#1b2733;
+    --text:#e8edf2; --muted:#9aabbb; --border:#2c3a48;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    padding:24px 16px 60px;
+  }
+  h1{font-size:20px; margin:0 0 4px; font-weight:700;}
+  .sub{color:var(--muted); font-size:13px; margin-bottom:20px;}
+  .progress-wrap{width:100%; max-width:640px; margin-bottom:24px;}
+  .progress-bar{height:10px; background:var(--border); border-radius:6px; overflow:hidden; display:flex;}
+  .progress-bar .mastered{background:var(--green);}
+  .progress-bar .learning{background:var(--blue);}
+  .progress-stats{display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-top:6px;}
+  .card{
+    width:100%; max-width:640px; background:var(--card); border:1px solid var(--border);
+    border-radius:14px; padding:28px 26px; box-shadow:0 6px 24px rgba(0,0,0,0.25);
+  }
+  .qtype{font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin-bottom:10px; font-weight:600;}
+  .prompt{font-size:19px; line-height:1.45; margin-bottom:22px; min-height:60px;}
+  .choices{display:flex; flex-direction:column; gap:10px;}
+  .choice-btn{
+    text-align:left; background:#22303d; border:2px solid var(--border); color:var(--text);
+    padding:14px 16px; border-radius:10px; font-size:15px; cursor:pointer; transition:border-color .15s, background .15s;
+  }
+  .choice-btn:hover{border-color:var(--blue);}
+  .choice-btn.correct{border-color:var(--green); background:#173323;}
+  .choice-btn.incorrect{border-color:var(--red); background:#331919;}
+  .choice-btn:disabled{cursor:default;}
+  textarea, input[type=text]{
+    width:100%; background:#22303d; border:2px solid var(--border); border-radius:10px; color:var(--text);
+    padding:12px 14px; font-size:15px; font-family:inherit; resize:none;
+  }
+  textarea:focus, input[type=text]:focus{outline:none; border-color:var(--blue);}
+  .btn{
+    background:var(--blue); color:#fff; border:none; padding:11px 22px; border-radius:8px;
+    font-size:14px; font-weight:600; cursor:pointer; margin-top:16px;
+  }
+  .btn.secondary{background:transparent; border:2px solid var(--border); color:var(--text);}
+  .btn.green{background:var(--green);}
+  .btn.red{background:var(--red);}
+  .btn-row{display:flex; gap:10px; margin-top:16px;}
+  .feedback{margin-top:18px; padding:14px 16px; border-radius:10px;}
+  .feedback.correct{background:#173323; border:1px solid var(--green);}
+  .feedback.incorrect{background:#331919; border:1px solid var(--red);}
+  .feedback .label{font-weight:700; font-size:14px; margin-bottom:6px;}
+  .feedback .answer{font-size:15px; line-height:1.4;}
+  .done-screen{text-align:center;}
+  .done-screen h2{font-size:24px; margin-bottom:8px;}
+  .done-screen p{color:var(--muted); margin-bottom:20px;}
+  select{background:#22303d; color:var(--text); border:2px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px;}
+  .top-controls{width:100%; max-width:640px; display:flex; justify-content:flex-end; margin-bottom:8px;}
+</style>
+</head>
+<body>
+
+<h1>Child Psych — Learn Mode</h1>
+<div class="sub">PSYC 2700 · Theories, Methods, Prenatal Dev, Genes, Brain, Perception</div>
+
+<div class="top-controls">
+  <button class="btn secondary" id="resetBtn" style="margin:0; font-size:12px; padding:6px 12px;">Reset Progress</button>
+</div>
+
+<div class="progress-wrap">
+  <div class="progress-bar">
+    <div class="mastered" id="masteredBar" style="width:0%"></div>
+    <div class="learning" id="learningBar" style="width:0%"></div>
+  </div>
+  <div class="progress-stats">
+    <span id="statText">0 / 0 mastered</span>
+    <span id="roundText"></span>
+  </div>
+</div>
+
+<div class="card" id="card"></div>
+
+<script>
+const DATA = [
+["Behaviorism", `Learning theory (Watson, Skinner) focused on how environment shapes behavior through conditioning; emphasizes nurture and continuous development`],
+["Social Learning Theory (SLT)", `Bandura's theory that children learn behaviors by observing and imitating others (observational learning/modeling)`],
+["Piaget's Theory", `Cognitive development theory proposing children actively construct understanding of the world through stages; emphasizes discontinuous (stage-like) development`],
+["Vygotsky's Theory", `Sociocultural theory of cognitive development emphasizing the role of social interaction and culture in learning`],
+["Evolutionary Theory", `Perspective (rooted in Darwin's natural selection) proposing that many behaviors and preferences evolved because they aided survival and reproduction`],
+["Kindchenschema", `"Baby schema" - set of infant facial/body features (big eyes, round face, etc.) that evolutionarily elicit caregiving behavior from adults`],
+["Critical period", `A limited time span in development during which a specific experience must occur for normal development to happen`],
+["Bronfenbrenner's Bioecological (Ecological) Theory", `Theory that development is influenced by nested environmental systems surrounding the child`],
+["Microsystem", `The immediate environments a child directly interacts with (e.g., family, school, peers)`],
+["Mesosystem", `The interconnections between a child's immediate settings (e.g., link between home and school)`],
+["Exosystem", `Settings that affect the child indirectly, without the child's direct involvement (e.g., a parent's workplace)`],
+["Macrosystem", `The broader cultural values, laws, and customs that influence the child's environment`],
+["Chronosystem", `The dimension of time, including historical events and changes over the child's life`],
+["Nature-Nurture theme", `An enduring theme in developmental psychology debating the relative contributions of biology (nature) vs. environment/experience (nurture)`],
+["Continuous vs. Discontinuous development", `An enduring theme debating whether development is a gradual, cumulative process (continuous) or occurs in distinct stages (discontinuous)`],
+["Structured interview", `Data-gathering method in which all participants are asked the same questions in the same order`],
+["Clinical interview", `Flexible interview method where questions are adjusted based on participants' previous answers`],
+["Naturalistic observation", `Research method of observing behavior in real-world, everyday settings`],
+["Structured observation", `Research method of observing behavior in a controlled setting designed to elicit the behavior of interest`],
+["Cross-sectional design", `Research design comparing groups of different-aged children at a single point in time`],
+["Longitudinal design", `Research design following the same group of children over time, testing them repeatedly as they age`],
+["Microgenetic design", `Research design involving repeated, intensive observation of children over a short period to study a change in progress`],
+["Reliability", `The extent to which a measurement is consistent and repeatable`],
+["Validity", `The extent to which a measurement or method actually measures what it claims to measure`],
+["Correlational study", `A study that measures the relationship between two variables without manipulating them; cannot establish causation`],
+["Third-variable problem", `Issue in correlational research where an unmeasured variable may cause changes in both variables being studied`],
+["Experimental study", `A study in which the researcher manipulates one variable to determine its causal effect on another variable`],
+["Independent variable", `The variable that the experimenter manipulates in an experiment`],
+["Dependent variable", `The variable that is measured to see if it is affected by the independent variable`],
+["Random assignment", `Method of assigning participants to experimental conditions by chance, to ensure groups are equivalent`],
+["Experimental control", `Keeping all variables constant except the independent variable, so causal inferences can be made`],
+["Germinal stage", `First prenatal stage (~0-2 weeks), from fertilization through implantation of the zygote in the uterine wall`],
+["Embryonic stage", `Second prenatal stage (3rd-8th week) during which major organs and body structures begin to form`],
+["Fetal stage", `Third and longest prenatal stage (9th week until birth), marked by rapid growth and organ maturation`],
+["Zygote", `The single cell formed by the union of sperm and egg at fertilization`],
+["Mitosis", `The process of cell division by which the zygote and embryo grow`],
+["Implantation", `The process by which the zygote attaches to and burrows into the wall of the uterus`],
+["Amniotic sac", `Fluid-filled membrane that surrounds and cushions the developing fetus`],
+["Placenta", `Organ that allows exchange of nutrients and waste between mother and fetus via the umbilical cord`],
+["Umbilical cord", `Structure connecting the fetus to the placenta, carrying nutrients and removing waste`],
+["Cell differentiation", `Process by which cells become specialized in structure and function`],
+["Apoptosis", `Programmed cell death that helps shape organs and tissues during development`],
+["Cephalocaudal growth", `Pattern of growth proceeding from head to tail (top of body develops before lower body)`],
+["Teratogen", `An external agent (e.g., drug, virus, chemical) that can cause abnormal prenatal development`],
+["Fetal Alcohol Syndrome (FAS)", `A set of birth defects (including facial abnormalities and intellectual disability) caused by maternal alcohol consumption during pregnancy`],
+["Sensitive period (prenatal)", `A window of time during prenatal development when a developing structure is most vulnerable to particular teratogens`],
+["SIDS", `Sudden Infant Death Syndrome; unexplained death of a healthy infant, risk reduced by practices like back-sleeping`],
+["Chromosomes", `Threadlike structures in the cell nucleus that contain genetic material; humans inherit 23 from each parent`],
+["DNA (deoxyribonucleic acid)", `Molecule made of two twisted strands (double helix) that carries genetic code and hereditary information`],
+["Genes", `Segments of DNA that provide biochemical instructions for the formation and functioning of an organism`],
+["Genotype", `The complete set of genes that makes up a person's heredity`],
+["Phenotype", `The observable expression of a genotype - physical, behavioral, and psychological features resulting from the interaction of genes and environment`],
+["Regulator genes", `Genes that switch other genes "on" or "off" to influence development and behavior`],
+["Alleles", `Two or more different forms of a given gene`],
+["Homozygous", `Having two of the same allele for a gene; the corresponding trait is expressed`],
+["Heterozygous", `Having one of each allele (one dominant, one recessive) for a gene; the dominant allele is expressed`],
+["Polygenic trait", `A trait influenced by many different genes acting together (typical of complex behavioral traits)`],
+["Behavior genetics", `Field studying the extent to which genetic similarity between individuals predicts phenotypic similarity for a trait`],
+["Monozygotic vs. dizygotic twins", `Identical twins (from one fertilized egg, share 100% of genes) vs. fraternal twins (from two eggs, share ~50% of genes)`],
+["Adoption study", `Research method comparing adopted children to biological vs. adoptive parents to separate genetic and environmental influences`],
+["Heredity-environment principle: dynamic interaction", `Principle that heredity and environment interact continuously throughout development (e.g., PKU, where diet determines whether a genetic mutation causes intellectual disability)`],
+["Phenylketonuria (PKU)", `A genetic disorder in which the body cannot break down phenylalanine; causes intellectual disability only if a normal diet (containing phenylalanine) is eaten, illustrating gene-environment interaction`],
+["Heredity-environment principle: niche-picking", `Principle that genes influence the kind of environments a person is exposed to and seeks out`],
+["Niche-picking", `The process by which a person's genetically influenced traits lead them to seek out particular environments/experiences`],
+["Epigenetics", `Study of how the environment contributes to stable changes in gene expression without altering the DNA sequence`],
+["Methylation", `Epigenetic process that reduces or "silences" the expression of certain genes`],
+["Neurogenesis", `The creation of neurons through cell division; begins ~42 days after conception, nearly complete by mid-gestation`],
+["Neuron migration", `Process by which newly generated neurons move outward from the center of the brain to their destinations`],
+["Synaptogenesis", `The creation of synapses (connections) between neurons; rapid before birth, continues after birth`],
+["Synaptic pruning", `The selective elimination of weak or rarely used synapses ("use it or lose it"); begins at birth, continues in waves into early adulthood`],
+["Plasticity (brain)", `The capacity of the brain to be affected/shaped by experience`],
+["Experience-expectant plasticity", `Brain development that relies on general experiences common to a species' evolutionary history (e.g., exposure to sounds, movement, visual stimulation)`],
+["Experience-dependent plasticity", `Brain development shaped by unique, individual experiences (e.g., musical training)`],
+["Sensitive period (brain development)", `A time when the brain is especially responsive to particular environmental input for development/reorganization; the window gradually closes`],
+["Frontal lobe", `Brain region responsible for planning, decision-making, impulse control, voluntary movement, attention, memory, and language production`],
+["Parietal lobe", `Brain region involved in processing sensory information such as touch, temperature, and spatial awareness`],
+["Occipital lobe", `Brain region primarily responsible for visual processing`],
+["Temporal lobe", `Brain region involved in auditory processing, language comprehension, and memory`],
+["Back-to-front brain development", `General pattern in which the brain develops from occipital (automatic processes) to frontal regions (complex, deliberate processes)`],
+["Sensation", `The processing of basic information from the external world by sensory receptors in the sense organs`],
+["Perception", `The process of organizing and interpreting sensory information`],
+["Habituation", `Responding with decreased attention ("boredom") to a stimulus after repeated exposure`],
+["Dishabituation", `Renewed attention to a new stimulus, indicating an infant has noticed it differs from a previously habituated stimulus`],
+["Preferential-looking technique", `Research method that uses an infant's looking time to different stimuli to infer perceptual preferences and abilities`],
+["Visual acuity", `How clearly one can see fine detail; controlled by cone cells; low in infants but reaches near-adult levels by 8 months`],
+["Cones", `Photoreceptor cells responsible for visual acuity and color vision`],
+["Object segregation", `The perceptual process of determining where one object ends and another begins, using cues like common movement`],
+["Binocular disparity", `The difference between the retinal images of an object in the two eyes, due to the distance between the eyes`],
+["Stereopsis", `The brain's process of combining differing binocular neural signals to produce perception of depth; emerges around 4 months`],
+["Auditory localization", `The ability to determine the direction/source of a sound; poor in newborns, improves over first years`],
+["Intermodal perception", `The integration of information from two or more sensory modalities (e.g., oral-visual, auditory-visual)`],
+["Sensory deprivation", `A method of studying nature-nurture interaction by depriving an organism of certain sensory experiences early in life to observe effects on perceptual development`],
+["Perceptual narrowing", `Process by which infants' broad perceptual sensitivity narrows to become tuned to stimuli relevant to their own environment/culture`],
+["Other Race Effect (ORE)", `The perceptual narrowing phenomenon in which people become better at distinguishing faces of races they have more experience with`]
+];
+
+const STORAGE_KEY = "childPsychLearnProgress_v1";
+const NEEDED_CORRECT = 2; // must get right once via multiple choice, once via written recall
+
+let state = {
+  items: [], // {t, d, status} status: 0=new,1=passed MC,2=mastered
+  queue: [],
+  current: null,
+  mode: null, // 'mc' or 'written'
+  direction: null, // 'def' (show term->pick def) or 'term' (show def->pick term)
+  answered: false
+};
+
+function loadProgress(){
+  const saved = localStorage.getItem(STORAGE_KEY);
+  let progress = {};
+  if(saved){
+    try{ progress = JSON.parse(saved); }catch(e){ progress = {}; }
+  }
+  state.items = DATA.map(([t,d]) => ({t, d, status: progress[t] || 0}));
+}
+
+function saveProgress(){
+  const progress = {};
+  state.items.forEach(it => { progress[it.t] = it.status; });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+}
+
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function buildQueue(){
+  state.queue = shuffle(state.items.filter(it => it.status < NEEDED_CORRECT));
+}
+
+function updateProgressBar(){
+  const total = state.items.length;
+  const mastered = state.items.filter(it => it.status >= NEEDED_CORRECT).length;
+  const learning = state.items.filter(it => it.status === 1).length;
+  document.getElementById("masteredBar").style.width = (mastered/total*100)+"%";
+  document.getElementById("learningBar").style.width = (learning/total*100)+"%";
+  document.getElementById("statText").textContent = `${mastered} / ${total} mastered`;
+  document.getElementById("roundText").textContent = `${state.queue.length} left this round`;
+}
+
+function normalize(s){
+  return s.toLowerCase().replace(/[^\w\s]/g,' ').replace(/\s+/g,' ').trim();
+}
+
+const STOPWORDS = new Set(['a','an','the','of','to','in','and','or','is','are','that','this','which','by','with','for','on','as','from','be','it','its','their','they','than','into','such','can','also','not','but','at','was','were','been']);
+
+function significantWords(s){
+  return normalize(s).split(' ').filter(w => w.length>2 && !STOPWORDS.has(w));
+}
+
+function levenshtein(a,b){
+  const m=a.length,n=b.length;
+  const dp=Array.from({length:m+1},()=>new Array(n+1).fill(0));
+  for(let i=0;i<=m;i++)dp[i][0]=i;
+  for(let j=0;j<=n;j++)dp[0][j]=j;
+  for(let i=1;i<=m;i++)
+    for(let j=1;j<=n;j++)
+      dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j-1],dp[i-1][j],dp[i][j-1]);
+  return dp[m][n];
+}
+
+function isLikelyCorrect(userAnswer, correctAnswer, isShortTerm){
+  const ua = normalize(userAnswer);
+  if(!ua) return false;
+  if(isShortTerm){
+    const ca = normalize(correctAnswer);
+    const dist = levenshtein(ua, ca);
+    const threshold = Math.max(2, Math.round(ca.length*0.25));
+    return dist <= threshold || ca.includes(ua) || ua.includes(ca);
+  }else{
+    const sig = significantWords(correctAnswer);
+    if(sig.length===0) return true;
+    const uaWords = new Set(significantWords(userAnswer));
+    let matches = 0;
+    sig.forEach(w => { if(uaWords.has(w)) matches++; });
+    return (matches/sig.length) >= 0.4;
+  }
+}
+
+function pickDistractors(pool, correctItem, field, count){
+  const others = pool.filter(it => it !== correctItem);
+  const shuffled = shuffle(others).slice(0, count);
+  return shuffled.map(it => field === 'd' ? it.d : it.t);
+}
+
+function nextQuestion(){
+  if(state.queue.length === 0){
+    renderDone();
+    return;
+  }
+  const item = state.queue.shift();
+  state.current = item;
+  state.answered = false;
+  state.direction = Math.random() < 0.5 ? 'def' : 'term'; // 'def' = show term, ask definition; 'term' = show def, ask term
+  state.mode = item.status === 0 ? 'mc' : 'written';
+  render();
+  updateProgressBar();
+}
+
+function render(){
+  const card = document.getElementById("card");
+  const item = state.current;
+  const askingFor = state.direction === 'def' ? 'definition' : 'term';
+  const promptText = state.direction === 'def' ? item.t : item.d;
+
+  if(state.mode === 'mc'){
+    const correctAnswer = state.direction === 'def' ? item.d : item.t;
+    const field = state.direction === 'def' ? 'd' : 't';
+    const distractors = pickDistractors(state.items, item, field, 3);
+    const choices = shuffle([correctAnswer, ...distractors]);
+    card.innerHTML = `
+      <div class="qtype">Multiple choice — select the matching ${askingFor}</div>
+      <div class="prompt">${escapeHtml(promptText)}</div>
+      <div class="choices" id="choices"></div>
+    `;
+    const choicesEl = document.getElementById("choices");
+    choices.forEach(choice => {
+      const btn = document.createElement("button");
+      btn.className = "choice-btn";
+      btn.textContent = choice;
+      btn.onclick = () => handleMcAnswer(choice, correctAnswer, btn, choicesEl);
+      choicesEl.appendChild(btn);
+    });
+  }else{
+    const correctAnswer = state.direction === 'def' ? item.d : item.t;
+    card.innerHTML = `
+      <div class="qtype">Written — type the matching ${askingFor}</div>
+      <div class="prompt">${escapeHtml(promptText)}</div>
+      <textarea id="writtenInput" rows="3" placeholder="Type your answer..."></textarea>
+      <button class="btn" id="submitWritten">Submit</button>
+      <div id="feedbackArea"></div>
+    `;
+    const input = document.getElementById("writtenInput");
+    input.focus();
+    const submit = () => handleWrittenAnswer(correctAnswer, askingFor === 'term');
+    document.getElementById("submitWritten").onclick = submit;
+    input.addEventListener('keydown', e => {
+      if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submit(); }
+    });
+  }
+}
+
+function handleMcAnswer(choice, correctAnswer, btnClicked, choicesEl){
+  if(state.answered) return;
+  state.answered = true;
+  const buttons = choicesEl.querySelectorAll('.choice-btn');
+  buttons.forEach(b => {
+    b.disabled = true;
+    if(b.textContent === correctAnswer) b.classList.add('correct');
+  });
+  const isCorrect = choice === correctAnswer;
+  if(!isCorrect) btnClicked.classList.add('incorrect');
+
+  processResult(isCorrect);
+
+  const cont = document.createElement('button');
+  cont.className = 'btn';
+  cont.textContent = 'Continue';
+  cont.onclick = nextQuestion;
+  choicesEl.parentElement.appendChild(cont);
+}
+
+function handleWrittenAnswer(correctAnswer, isShortTerm){
+  const input = document.getElementById("writtenInput");
+  const userAnswer = input.value;
+  const auto = isLikelyCorrect(userAnswer, correctAnswer, isShortTerm);
+  input.disabled = true;
+  document.getElementById("submitWritten").remove();
+
+  const feedbackArea = document.getElementById("feedbackArea");
+  feedbackArea.innerHTML = `
+    <div class="feedback ${auto ? 'correct' : 'incorrect'}" id="fbBox">
+      <div class="label">${auto ? "Looks correct!" : "Not quite"}</div>
+      <div class="answer"><strong>Correct answer:</strong> ${escapeHtml(correctAnswer)}</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn green" id="markRight">I was right</button>
+      <button class="btn red" id="markWrong">I was wrong</button>
+    </div>
+  `;
+
+  document.getElementById("markRight").onclick = () => finalizeWritten(true);
+  document.getElementById("markWrong").onclick = () => finalizeWritten(false);
+}
+
+function finalizeWritten(isCorrect){
+  if(state.answered) return;
+  state.answered = true;
+  processResult(isCorrect);
+  const feedbackArea = document.getElementById("feedbackArea");
+  const cont = document.createElement('button');
+  cont.className = 'btn';
+  cont.textContent = 'Continue';
+  cont.onclick = nextQuestion;
+  feedbackArea.appendChild(cont);
+  document.getElementById("markRight").disabled = true;
+  document.getElementById("markWrong").disabled = true;
+}
+
+function processResult(isCorrect){
+  const item = state.current;
+  if(isCorrect){
+    item.status = Math.min(NEEDED_CORRECT, item.status + 1);
+    if(item.status < NEEDED_CORRECT){
+      const insertAt = Math.min(state.queue.length, 3);
+      state.queue.splice(insertAt, 0, item);
+    }
+  }else{
+    item.status = 0;
+    const insertAt = Math.min(state.queue.length, 3);
+    state.queue.splice(insertAt, 0, item);
+  }
+  saveProgress();
+  updateProgressBar();
+}
+
+function renderDone(){
+  const card = document.getElementById("card");
+  card.innerHTML = `
+    <div class="done-screen">
+      <h2>Round complete! 🎉</h2>
+      <p>All ${state.items.length} terms mastered (correct once via multiple choice, once written).</p>
+      <button class="btn" id="restartRound">Study Again</button>
+    </div>
+  `;
+  document.getElementById("restartRound").onclick = () => {
+    state.items.forEach(it => it.status = 0);
+    saveProgress();
+    buildQueue();
+    nextQuestion();
+  };
+  updateProgressBar();
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+document.getElementById("resetBtn").onclick = () => {
+  if(confirm("Reset all progress?")){
+    localStorage.removeItem(STORAGE_KEY);
+    loadProgress();
+    buildQueue();
+    nextQuestion();
+  }
+};
+
+loadProgress();
+buildQueue();
+nextQuestion();
+</script>
+</body>
+</html>
