@@ -58,7 +58,30 @@
   .done-screen h2{font-size:24px; margin-bottom:8px;}
   .done-screen p{color:var(--muted); margin-bottom:20px;}
   select{background:#22303d; color:var(--text); border:2px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px;}
-  .top-controls{width:100%; max-width:640px; display:flex; justify-content:flex-end; margin-bottom:8px;}
+  .top-controls{width:100%; max-width:640px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+  .tabs{display:flex; gap:8px;}
+  .tab-btn{background:transparent; border:2px solid var(--border); color:var(--muted); padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;}
+  .tab-btn.active{border-color:var(--blue); color:var(--text); background:#1b2733;}
+  .match-header{width:100%; max-width:640px; display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; font-size:14px; color:var(--muted);}
+  .match-header .timer{font-size:20px; font-weight:700; color:var(--text);}
+  .match-grid{width:100%; max-width:640px; display:grid; grid-template-columns:repeat(4,1fr); gap:10px;}
+  .match-tile{
+    background:#22303d; border:2px solid var(--border); color:var(--text); border-radius:10px;
+    padding:12px 10px; font-size:13px; line-height:1.3; cursor:pointer; min-height:90px; min-width:0;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    overflow-wrap:break-word; transition:border-color .15s, background .15s;
+  }
+  @media (max-width:480px){
+    .match-grid{grid-template-columns:repeat(2,1fr);}
+  }
+  .match-tile.term{font-weight:700;}
+  .match-tile.selected{border-color:var(--blue); background:#1c2e42;}
+  .match-tile.correct{border-color:var(--green); background:#173323;}
+  .match-tile.wrong{border-color:var(--red); background:#331919;}
+  .match-tile.matched{visibility:hidden;}
+  .match-done{text-align:center; width:100%; max-width:640px;}
+  .match-done h2{font-size:22px; margin-bottom:6px;}
+  .match-done p{color:var(--muted); margin-bottom:16px;}
 </style>
 </head>
 <body>
@@ -67,21 +90,36 @@
 <div class="sub">PSYC 2700 · Theories, Methods, Prenatal Dev, Genes, Brain, Perception</div>
 
 <div class="top-controls">
+  <div class="tabs">
+    <button class="tab-btn active" id="tabLearn">Learn</button>
+    <button class="tab-btn" id="tabMatch">Match</button>
+  </div>
   <button class="btn secondary" id="resetBtn" style="margin:0; font-size:12px; padding:6px 12px;">Reset Progress</button>
 </div>
 
-<div class="progress-wrap">
-  <div class="progress-bar">
-    <div class="mastered" id="masteredBar" style="width:0%"></div>
-    <div class="learning" id="learningBar" style="width:0%"></div>
+<div id="learnView">
+  <div class="progress-wrap">
+    <div class="progress-bar">
+      <div class="mastered" id="masteredBar" style="width:0%"></div>
+      <div class="learning" id="learningBar" style="width:0%"></div>
+    </div>
+    <div class="progress-stats">
+      <span id="statText">0 / 0 mastered</span>
+      <span id="roundText"></span>
+    </div>
   </div>
-  <div class="progress-stats">
-    <span id="statText">0 / 0 mastered</span>
-    <span id="roundText"></span>
-  </div>
+
+  <div class="card" id="card"></div>
 </div>
 
-<div class="card" id="card"></div>
+<div id="matchView" style="display:none;">
+  <div class="match-header">
+    <span class="timer" id="matchTimer">0.0s</span>
+    <span id="matchBest"></span>
+    <button class="btn secondary" id="matchRestartBtn" style="margin:0; font-size:12px; padding:6px 12px;">New Game</button>
+  </div>
+  <div class="match-grid" id="matchGrid"></div>
+</div>
 
 <script>
 const DATA = [
@@ -438,6 +476,167 @@ document.getElementById("resetBtn").onclick = () => {
     buildQueue();
     nextQuestion();
   }
+};
+
+// ---------- Match game ----------
+const MATCH_BEST_KEY = "childPsychMatchBest_v1";
+const MATCH_PAIRS = 8;
+
+let matchState = {
+  tiles: [],
+  selected: [],
+  matchedCount: 0,
+  totalPairs: 0,
+  startTime: 0,
+  timerHandle: null,
+  locked: false
+};
+
+function formatTime(ms){
+  return (ms/1000).toFixed(1) + "s";
+}
+
+function getMatchBest(){
+  const v = localStorage.getItem(MATCH_BEST_KEY);
+  return v ? parseFloat(v) : null;
+}
+
+function updateMatchBestDisplay(){
+  const best = getMatchBest();
+  document.getElementById("matchBest").textContent = best ? `Best: ${formatTime(best)}` : "";
+}
+
+function startMatchGame(){
+  clearInterval(matchState.timerHandle);
+  const pairsCount = Math.min(MATCH_PAIRS, DATA.length);
+  const chosen = shuffle(DATA).slice(0, pairsCount);
+  const tiles = [];
+  chosen.forEach((pair, idx) => {
+    tiles.push({ id: idx + "-t", pairId: idx, type: "term", text: pair[0], matched: false });
+    tiles.push({ id: idx + "-d", pairId: idx, type: "def", text: pair[1], matched: false });
+  });
+  matchState.tiles = shuffle(tiles);
+  matchState.selected = [];
+  matchState.matchedCount = 0;
+  matchState.totalPairs = pairsCount;
+  matchState.locked = false;
+  matchState.startTime = Date.now();
+
+  renderMatchGrid();
+  updateMatchBestDisplay();
+
+  matchState.timerHandle = setInterval(() => {
+    document.getElementById("matchTimer").textContent = formatTime(Date.now() - matchState.startTime);
+  }, 100);
+}
+
+function renderMatchGrid(){
+  const grid = document.getElementById("matchGrid");
+  grid.style.display = "";
+  grid.innerHTML = "";
+  matchState.tiles.forEach(tile => {
+    const el = document.createElement("div");
+    el.className = "match-tile " + tile.type;
+    el.textContent = tile.text;
+    el.dataset.id = tile.id;
+    el.onclick = () => handleTileClick(tile, el);
+    grid.appendChild(el);
+  });
+}
+
+function handleTileClick(tile, el){
+  if(matchState.locked || tile.matched) return;
+  if(matchState.selected.some(s => s.tile.id === tile.id)) return;
+
+  el.classList.add("selected");
+  matchState.selected.push({ tile, el });
+
+  if(matchState.selected.length < 2) return;
+
+  const [a, b] = matchState.selected;
+  const isMatch = a.tile.pairId === b.tile.pairId && a.tile.type !== b.tile.type;
+
+  matchState.locked = true;
+
+  if(isMatch){
+    a.tile.matched = true;
+    b.tile.matched = true;
+    a.el.classList.add("correct");
+    b.el.classList.add("correct");
+    setTimeout(() => {
+      a.el.classList.add("matched");
+      b.el.classList.add("matched");
+      matchState.selected = [];
+      matchState.locked = false;
+      matchState.matchedCount++;
+      if(matchState.matchedCount === matchState.totalPairs){
+        finishMatchGame();
+      }
+    }, 300);
+  }else{
+    a.el.classList.add("wrong");
+    b.el.classList.add("wrong");
+    setTimeout(() => {
+      a.el.classList.remove("selected", "wrong");
+      b.el.classList.remove("selected", "wrong");
+      matchState.selected = [];
+      matchState.locked = false;
+    }, 600);
+  }
+}
+
+function finishMatchGame(){
+  clearInterval(matchState.timerHandle);
+  const elapsed = Date.now() - matchState.startTime;
+  document.getElementById("matchTimer").textContent = formatTime(elapsed);
+
+  const best = getMatchBest();
+  let newBest = false;
+  if(best === null || elapsed < best){
+    localStorage.setItem(MATCH_BEST_KEY, String(elapsed));
+    newBest = true;
+  }
+  updateMatchBestDisplay();
+
+  const grid = document.getElementById("matchGrid");
+  grid.style.display = "none";
+  const done = document.createElement("div");
+  done.className = "match-done";
+  done.innerHTML = `
+    <h2>Matched all ${matchState.totalPairs} pairs in ${formatTime(elapsed)}${newBest ? " — new best!" : ""}</h2>
+    <p>Nice work. Play again for a new random set of terms.</p>
+    <button class="btn" id="matchPlayAgain">Play Again</button>
+  `;
+  grid.after(done);
+  document.getElementById("matchPlayAgain").onclick = () => {
+    done.remove();
+    startMatchGame();
+  };
+}
+
+document.getElementById("matchRestartBtn").onclick = () => {
+  const existingDone = document.querySelector(".match-done");
+  if(existingDone) existingDone.remove();
+  startMatchGame();
+};
+
+// ---------- Tab switching ----------
+document.getElementById("tabLearn").onclick = () => {
+  document.getElementById("tabLearn").classList.add("active");
+  document.getElementById("tabMatch").classList.remove("active");
+  document.getElementById("learnView").style.display = "";
+  document.getElementById("matchView").style.display = "none";
+  clearInterval(matchState.timerHandle);
+};
+
+document.getElementById("tabMatch").onclick = () => {
+  document.getElementById("tabMatch").classList.add("active");
+  document.getElementById("tabLearn").classList.remove("active");
+  document.getElementById("matchView").style.display = "";
+  document.getElementById("learnView").style.display = "none";
+  const existingDone = document.querySelector(".match-done");
+  if(existingDone) existingDone.remove();
+  startMatchGame();
 };
 
 loadProgress();
