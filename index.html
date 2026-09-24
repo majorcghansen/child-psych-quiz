@@ -82,6 +82,9 @@
   .match-done{text-align:center; width:100%; max-width:640px;}
   .match-done h2{font-size:22px; margin-bottom:6px;}
   .match-done p{color:var(--muted); margin-bottom:16px;}
+  .learn-toggle-row{width:100%; max-width:640px; display:flex; justify-content:flex-end; margin-bottom:10px;}
+  .mc-toggle{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); cursor:pointer; user-select:none;}
+  .mc-toggle input{accent-color:var(--blue); width:14px; height:14px; cursor:pointer;}
 </style>
 </head>
 <body>
@@ -98,6 +101,11 @@
 </div>
 
 <div id="learnView">
+  <div class="learn-toggle-row">
+    <label class="mc-toggle" for="mcOnlyToggle">
+      <input type="checkbox" id="mcOnlyToggle"> Multiple choice only
+    </label>
+  </div>
   <div class="progress-wrap">
     <div class="progress-bar">
       <div class="mastered" id="masteredBar" style="width:0%"></div>
@@ -220,7 +228,10 @@ const DATA = [
 ];
 
 const STORAGE_KEY = "childPsychLearnProgress_v1";
+const MC_ONLY_KEY = "childPsychMcOnly_v1";
 const NEEDED_CORRECT = 2; // must get right once via multiple choice, once via written recall
+
+let mcOnly = localStorage.getItem(MC_ONLY_KEY) === "1";
 
 let state = {
   items: [], // {t, d, status} status: 0=new,1=passed MC,2=mastered
@@ -323,7 +334,7 @@ function nextQuestion(){
   state.current = item;
   state.answered = false;
   state.direction = Math.random() < 0.5 ? 'def' : 'term'; // 'def' = show term, ask definition; 'term' = show def, ask term
-  state.mode = item.status === 0 ? 'mc' : 'written';
+  state.mode = mcOnly ? 'mc' : (item.status === 0 ? 'mc' : 'written');
   render();
   updateProgressBar();
 }
@@ -468,6 +479,16 @@ function escapeHtml(str){
   div.textContent = str;
   return div.innerHTML;
 }
+
+document.getElementById("mcOnlyToggle").checked = mcOnly;
+document.getElementById("mcOnlyToggle").onchange = (e) => {
+  mcOnly = e.target.checked;
+  localStorage.setItem(MC_ONLY_KEY, mcOnly ? "1" : "0");
+  if(state.current && !state.answered){
+    state.mode = mcOnly ? 'mc' : (state.current.status === 0 ? 'mc' : 'written');
+    render();
+  }
+};
 
 document.getElementById("resetBtn").onclick = () => {
   if(confirm("Reset all progress?")){
